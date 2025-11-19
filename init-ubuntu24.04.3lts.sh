@@ -44,3 +44,7 @@ sudo apt install apparmor-profiles -y
 
 sudo systemctl mask ctrl-alt-del.target
 sudo systemctl daemon-reload
+
+sudo apt install qemu-guest-agent
+sudo systemctl start qemu-guest-agent
+sudo systemctl enable qemu-guest-agent
