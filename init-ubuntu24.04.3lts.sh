@@ -79,7 +79,11 @@ echo "=== Misc hardening / tooling ==="
 
 apt install -y apparmor-profiles
 
-systemctl mask ctrl-alt-del.target
+echo "→ Masking ctrl-alt-del.target (may already be overridden)..."
+if ! systemctl mask ctrl-alt-del.target 2>/dev/null; then
+  echo "   Skipping: ctrl-alt-del.target is already overridden."
+fi
+
 systemctl daemon-reload
 
 if systemd-detect-virt | grep -q "qemu"; then
