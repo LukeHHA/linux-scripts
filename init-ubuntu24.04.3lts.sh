@@ -1,50 +1,94 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -e
-
-sudo apt update && sudo apt upgrade -y
-
-sudo sed -i 's/^#\?DIR_MODE=.*/DIR_MODE=0750/' /etc/adduser.conf
-
-sudo sed -i 's:^#\?DSHELL=.*:DSHELL=/usr/sbin/nologin:' /etc/adduser.conf
-
-if ! getent group sshlogin >/dev/null; then
-    sudo addgroup sshlogin
+if [[ $EUID -ne 0 ]]; then
+  echo "Please run this script as root (e.g. sudo $0)"
+  exit 1
 fi
 
-sudo usermod -aG sshlogin $SUDO_USER
+echo "=== Base system update ==="
+apt update && apt upgrade -y
 
-cat <<EOF | sudo tee /etc/ssh/sshd_config.d/00-initssh.conf > /dev/null
+echo "=== Hardening adduser defaults ==="
+sed -i 's/^#\?DIR_MODE=.*/DIR_MODE=0750/' /etc/adduser.conf
+# Optional, only if you really want nologin as default:
+# sed -i 's:^#\?DSHELL=.*:DSHELL=/usr/sbin/nologin:' /etc/adduser.conf
+
+echo "=== SSH group & user setup ==="
+
+if ! getent group sshlogin >/dev/null; then
+  addgroup sshlogin
+fi
+
+TARGET_USER=${SUDO_USER:-}
+
+if [[ -z "${TARGET_USER}" ]]; then
+  read -rp "Enter the username that should be allowed SSH access: " TARGET_USER
+fi
+
+if ! id "${TARGET_USER}" >/dev/null 2>&1; then
+  echo "User '${TARGET_USER}' does not exist. Create it first, then rerun this script."
+  exit 1
+fi
+
+usermod -aG sshlogin "${TARGET_USER}"
+
+cat <<EOF > /etc/ssh/sshd_config.d/00-initssh.conf
 PasswordAuthentication no
 PermitRootLogin no
 X11Forwarding no
 AllowGroups sshlogin
-AllowUsers $SUDO_USER
+AllowUsers ${TARGET_USER}
 EOF
 
-if sudo grep -q "PubkeyAuthentication yes" /etc/ssh/sshd_config; then
-    sudo systemctl reload ssh.service
+echo "→ Reloading SSH daemon (make sure your SSH keys work before logging out!)"
+sshd -t && systemctl reload ssh.service
+
+echo
+echo "=== UFW / service profile setup ==="
+echo
+
+read -rp "Will this be an SSH-accessible server? (y/n): " SSH_CHOICE
+if [[ "$SSH_CHOICE" =~ ^[Yy]$ ]]; then
+  echo "→ Allowing SSH (22/tcp)"
+  ufw allow 22/tcp
 else
-    echo "WARNING: PubkeyAuthentication not enabled. Not restarting sshd."
+  echo "→ Not opening port 22"
 fi
 
-sudo ufw allow 22/tcp
-
-if ! dpkg -s nginx >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y nginx
+echo
+read -rp "Will this server run a web server (Nginx)? (y/n): " NGINX_CHOICE
+if [[ "$NGINX_CHOICE" =~ ^[Yy]$ ]]; then
+  echo "→ Installing Nginx"
+  if ! dpkg -s nginx >/dev/null 2>&1; then
+    apt install -y nginx
+  fi
+  echo "→ Allowing 'Nginx Full' firewall profile"
+  ufw allow 'Nginx Full'
+else
+  echo "→ Not installing Nginx"
 fi
 
-sudo ufw allow 'Nginx Full'
+echo
+echo "→ Enabling UFW (you may be prompted to confirm)"
+ufw logging on
+ufw enable
 
-sudo ufw enable
-sudo ufw logging on
+echo
+echo "=== Misc hardening / tooling ==="
 
-sudo apt install apparmor-profiles -y
+apt install -y apparmor-profiles
 
-sudo systemctl mask ctrl-alt-del.target
-sudo systemctl daemon-reload
+systemctl mask ctrl-alt-del.target
+systemctl daemon-reload
 
-sudo apt install qemu-guest-agent
-sudo systemctl start qemu-guest-agent
-sudo systemctl enable qemu-guest-agent
+if systemd-detect-virt | grep -q "qemu"; then
+  echo "→ Installing qemu-guest-agent for VM"
+  apt install -y qemu-guest-agent
+  systemctl enable --now qemu-guest-agent
+else
+  echo "→ Skipping qemu-guest-agent (not a QEMU VM)."
+fi
+
+echo
+echo "Setup complete."
