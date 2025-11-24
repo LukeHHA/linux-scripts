@@ -44,6 +44,25 @@ EOF
 echo "→ Reloading SSH daemon (make sure your SSH keys work before logging out!)"
 sshd -t && systemctl reload ssh.service
 
+read -rp "Do you want to add an SSH public key for ${TARGET_USER}? (y/n): " ADDKEY
+if [[ "$ADDKEY" =~ ^[Yy]$ ]]; then
+  echo "Paste the SSH public key for ${TARGET_USER}, then press Ctrl-D:"
+  
+  user_home=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+  mkdir -p "${user_home}/.ssh"
+  chmod 700 "${user_home}/.ssh"
+
+  # Append pasted key
+  cat >> "${user_home}/.ssh/authorized_keys"
+
+  chown -R "${TARGET_USER}:${TARGET_USER}" "${user_home}/.ssh"
+  chmod 600 "${user_home}/.ssh/authorized_keys"
+
+  echo "→ Public key added for ${TARGET_USER}."
+else
+  echo "→ Skipping SSH public key setup."
+fi
+
 echo
 echo "=== UFW / service profile setup ==="
 echo
