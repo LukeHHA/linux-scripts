@@ -105,12 +105,12 @@ fi
 
 systemctl daemon-reload
 
-if systemd-detect-virt | grep -q "qemu"; then
+read -rp "Do you want to install qemu-guest-agent? (y/n): " QEMU_CHOICE
+if [[ "$QEMU_CHOICE" =~ ^[Yy]$ ]]; then
   echo "→ Installing qemu-guest-agent for VM"
   apt install -y qemu-guest-agent
-  systemctl enable --now qemu-guest-agent
 else
-  echo "→ Skipping qemu-guest-agent (not a QEMU VM)."
+  echo "→ Skipping install of qemu-guest-agent"
 fi
 
 echo
