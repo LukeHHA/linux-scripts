@@ -93,6 +93,58 @@ echo "→ Enabling UFW (you may be prompted to confirm)"
 ufw logging on
 ufw enable
 
+
+echo
+echo "=== DOCKER / service setup ==="
+echo
+
+echo 
+read -rp "Will this server run docker? (y/n): " DOCKER_CHOICE
+if [[ "$DOCKER_CHOICE" =~ ^[Yy]$ ]]; then
+  echo "→ Installing Docker"
+  sudo apt install ca-certificates curl
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+  # Add the repository to Apt sources:
+  sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+  Types: deb
+  URIs: https://download.docker.com/linux/ubuntu
+  Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+  Components: stable
+  Signed-By: /etc/apt/keyrings/docker.asc
+  EOF
+
+  VERSION_STRING="5:28.5.2-1~ubuntu.24.04~noble"
+  
+  sudo apt install \
+      docker-ce="$VERSION_STRING" \
+      docker-ce-cli="$VERSION_STRING" \
+      containerd.io \
+      docker-buildx-plugin \
+      docker-compose-plugin
+  
+  sudo docker run hello-world
+else
+  echo "→ Not installing Docker"
+fi
+
+
+echo
+echo "=== Tailscale / service setup ==="
+echo
+
+read -rp "Do you want to install Tailscale? (y/n): " TAILSCALE_CHOICE
+if [[ "$TAILSCALE_CHOICE" =~ ^[Yy]$ ]]; then
+  echo "→ Installing Tailscale for VM"
+  curl -fsSL https://tailscale.com/install.sh | sh
+  tailscale up --advertise-tags=tag:dev --ssh 
+
+else
+  echo "→ Skipping install of Tailscale"
+fi
+
 echo
 echo "=== Misc hardening / tooling ==="
 
