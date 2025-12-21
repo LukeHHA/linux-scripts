@@ -116,7 +116,7 @@ Components: stable
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
-  VERSION_STRING="5:28.5.2~ubuntu.24.04~noble"
+  VERSION_STRING="5:28.5.2-1~ubuntu.24.04~noble"
   
   sudo apt install \
       docker-ce="$VERSION_STRING" \
